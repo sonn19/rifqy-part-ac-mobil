@@ -48,3 +48,17 @@ Setelah alamat GitHub Pages aktif, atur **Authentication → URL Configuration**
 Untuk domain sendiri, tentukan nama domain/subdomain terlebih dahulu, lalu atur **Custom domain** pada GitHub Pages dan DNS sesuai petunjuk GitHub. Belum ada domain khusus pada repositori ini.
 
 Repositori publik hanya berisi kode dan konfigurasi publishable key. Data barang, harga beli, transaksi, akun, dan kata sandi tidak disimpan di GitHub. Binding email owner untuk instalasi baru harus dilakukan secara privat di SQL Editor; email owner tidak ditanam dalam skrip publik. Proyek Supabase Rifqy yang sudah aktif telah memiliki binding owner.
+
+## Katalog publik + kasir dalam satu website
+
+- `index.html`, `catalog.css`, `catalog.js`: katalog yang bisa dibuka tanpa login; pencarian, filter kategori/merek/ketersediaan, pengurutan harga, dan detail barang.
+- `kasir.html`, `app.js`, `cloud.js`, `style.css`: sistem owner/admin di alamat yang sama melalui tombol kecil **Login Kasir**.
+- Katalog mengambil semua barang dari API `rifqy_catalog`. Hanya kode part, nama, merek, kategori, harga retail, status tersedia/tidak tersedia, dan kecocokan terverifikasi yang dipublikasikan. Jumlah stok persis, lokasi rak, harga beli, harga bengkel, akun, dan transaksi tidak dikirim oleh API publik.
+- Database asli tidak diisi contoh produk. Barang yang dimasukkan owner ke katalog kasir tampil di website saat katalog dimuat ulang.
+- Untuk instalasi database baru: jalankan `database/schema.sql`, lalu `database/public-catalog.sql`, dan provision email owner secara privat. Pada proyek Rifqy yang aktif, keduanya sudah dipasang.
+- Redirect email pendaftaran diarahkan ke `kasir.html`; tambahkan URL lengkap halaman kasir pada daftar Redirect URLs Supabase.
+- Konfigurasi domain IDCloudHost ada di [DOMAIN.md](DOMAIN.md).
+
+Validasi tambahan: akses katalog sebagai anon diuji dalam transaksi rollback untuk memastikan harga beli/harga bengkel/stok persis tidak terbuka, kecocokan yang belum diverifikasi tidak dipublikasikan, dan API kasir tetap terlindungi. Uji katalog juga mencakup render, pencarian kode, filter kategori/ketersediaan, pengurutan harga, dan escaping teks produk.
+
+Catatan pengaturan Auth: pemeriksaan Supabase menandai proteksi kata sandi bocor belum aktif. Pengaturan dan panduannya tersedia di [Password strength and leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
