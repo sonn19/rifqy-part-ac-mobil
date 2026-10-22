@@ -4,7 +4,7 @@ revoke all on schema rifqy from public, anon;
 grant usage on schema rifqy to authenticated;
 alter default privileges in schema rifqy revoke execute on functions from public;
 create table rifqy.members(email text primary key check(email=lower(email)), role text not null check(role in ('owner','admin')), active boolean not null default true);
-create unique index one_owner on rifqy.members(role) where role='owner';
+-- Multiple owner emails are supported; each owner must verify their own account.
 create table rifqy.products(id text primary key, sku text not null unique, name text not null, brand text not null default '', category text not null, cost numeric(14,0) not null check(cost>=0), retail numeric(14,0) not null check(retail>=0), wholesale numeric(14,0) not null check(wholesale>=0), stock integer not null default 0 check(stock>=0), minimum integer not null default 0 check(minimum>=0), rack text not null default '', fit text not null default '', verified boolean not null default false);
 create table rifqy.customers(id text primary key, name text not null, phone text not null default '', type text not null check(type in ('Eceran','Bengkel')), address text not null default '');
 create table rifqy.orders(id text primary key, number bigint generated always as identity unique, created_at timestamptz not null default now(), customer text not null, method text not null check(method in ('Tunai','Transfer bank','QRIS')), paid numeric(14,0) not null check(paid>=0), total numeric(14,0) not null check(total>=0), actor uuid not null references auth.users(id));
