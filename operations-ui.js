@@ -1,7 +1,7 @@
 // Operations extension: supplier purchasing, expenses, stock counts, profitability, labels.
 (function(){
 const previousRender=render,previousLoad=loadCloud;
-let operations={suppliers:[],purchases:[],expenses:[],stock_counts:[]};
+let operations={suppliers:[],purchases:[],expenses:[],stock_counts:[],supplier_payments:[]};
 const operationsRoutes=['purchasing','cashbook','inventory-count','profit','labels'];
 const navEntries=[['purchasing','Pembelian supplier','package'],['cashbook','Buku kas','wallet'],['inventory-count','Stok opname','clipboard'],['profit','Laba rugi','chart'],['labels','Label barcode','tag']];
 const validNum=x=>Number.isSafeInteger(Number(x))&&Number(x)>=0&&String(x).trim()!=='';
@@ -20,7 +20,13 @@ const input=(id,label,type='text')=>'<div class="field"><label>'+label+'</label>
 const productSelect=()=>'<select id="op-product">'+db.products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+esc(p.sku)+') · Stok '+p.stock+'</option>').join('')+'</select>';
 function operationsPage(r){
  const start='<section class="panel" style="padding:24px"><h2>'+navEntries.find(x=>x[0]===r)[1]+'</h2>';
- if(r==='purchasing')return start+'<h3>Tambah supplier</h3>'+input('supplier-name','Nama supplier')+input('supplier-phone','Telepon')+'<button class="btn" onclick="saveOperation(\'supplier\')">Simpan supplier</button><h3>Pembelian barang</h3><div class="field"><label>Supplier</label><select id="op-supplier">'+operations.suppliers.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></div><div class="field"><label>Barang</label>'+productSelect()+'</div>'+input('qty','Jumlah barang','number')+input('cost','Harga modal per unit','number')+input('paid','Jumlah dibayar ke supplier','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'purchase\')">Simpan pembelian & tambah stok</button><h3>Riwayat pembelian</h3>'+simpleTable(['Tanggal','Supplier','Total','Dibayar','Utang'],operations.purchases.map(p=>[date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(p.paid),money(p.total-p.paid)]))+'</section>';
+ if(r==='purchasing'){
+ const paidFor=id=>(operations.supplier_payments||[]).filter(x=>x.purchase_id===id).reduce((n,x)=>n+Number(x.amount),0);
+ const debt=operations.purchases.reduce((n,p)=>n+Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id)),0);
+ const history=operations.purchases.map(p=>{const remaining=Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id));return [date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(Number(p.paid)+paidFor(p.id)),money(remaining),remaining?'Belum lunas':'Lunas']});
+ const outstanding=operations.purchases.filter(p=>Number(p.total)-Number(p.paid)-paidFor(p.id)>0);
+ return start+'<p>Total utang supplier: <strong>'+money(debt)+'</strong></p><h3>Tambah supplier</h3>'+input('supplier-name','Nama supplier')+input('supplier-phone','Telepon')+'<button class="btn" onclick="saveOperation(\'supplier\')">Simpan supplier</button><h3>Pembelian barang</h3><div class="field"><label>Supplier</label><select id="op-supplier">'+operations.suppliers.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></div><div class="field"><label>Barang</label>'+productSelect()+'</div>'+input('qty','Jumlah barang','number')+input('cost','Harga modal per unit','number')+input('paid','Jumlah dibayar ke supplier','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'purchase\')">Simpan pembelian & tambah stok</button><h3>Bayar cicilan utang supplier</h3><div class="field"><label>Nota pembelian belum lunas</label><select id="op-debt-purchase">'+outstanding.map(p=>'<option value="'+esc(p.id)+'">'+esc(operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-')+' · '+esc(p.id)+' · Sisa '+money(Number(p.total)-Number(p.paid)-paidFor(p.id))+'</option>').join('')+'</select></div>'+input('debt-amount','Jumlah cicilan (Rp)','number')+'<div class="field"><label>Metode pembayaran</label><select id="op-debt-method"><option>Tunai</option><option>Transfer bank</option><option>QRIS</option></select></div>'+input('debt-note','Catatan pembayaran')+'<button class="btn" onclick="paySupplierDebt()">Catat pembayaran supplier</button><h3>Riwayat pembelian</h3>'+simpleTable(['Tanggal','Supplier','Total','Sudah dibayar','Sisa utang','Status'],history)+'<h3>Riwayat cicilan supplier</h3>'+simpleTable(['Tanggal','Nota pembelian','Nominal','Metode','Catatan'],(operations.supplier_payments||[]).map(p=>[date(p.paid_at),p.purchase_id,money(p.amount),p.method,p.note]))+'</section>';
+ }
  if(r==='cashbook')return start+'<h3>Catat pengeluaran</h3>'+input('category','Kategori')+input('description','Keterangan')+input('amount','Nominal (Rp)','number')+'<button class="btn" onclick="saveOperation(\'expense\')">Simpan pengeluaran</button><h3>Riwayat pengeluaran</h3>'+simpleTable(['Tanggal','Kategori','Keterangan','Nominal'],operations.expenses.map(e=>[date(e.created_at),e.category,e.description,money(e.amount)]))+'</section>';
  if(r==='inventory-count')return start+'<p>Masukkan jumlah fisik. Perbedaan dengan stok sistem akan tercatat sebagai koreksi.</p><div class="field"><label>Produk</label>'+productSelect()+'</div>'+input('actual','Jumlah fisik','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'stock_count\')">Simpan hasil opname</button><h3>Riwayat opname</h3>'+simpleTable(['Tanggal','Produk','Sistem','Fisik','Selisih'],operations.stock_counts.map(x=>[date(x.created_at),db.products.find(p=>p.id===x.product_id)?.name||x.product_id,x.system_qty,x.actual_qty,x.actual_qty-x.system_qty]))+'</section>';
  if(r==='profit'){const revenue=db.orders.reduce((n,o)=>n+Number(o.total||0),0),cost=db.orders.reduce((n,o)=>n+(o.items||[]).reduce((m,x)=>m+Number(x.cost||0)*Number(x.qty||0),0),0),expenses=operations.expenses.reduce((n,e)=>n+Number(e.amount),0);return start+'<p>Ringkasan seluruh data yang dimuat (bukan laporan per periode). Penjualan Bon dihitung sebagai pendapatan penjualan, bukan penerimaan kas.</p>'+simpleTable(['Komponen','Nilai'],[['Omzet',money(revenue)],['HPP barang terjual',money(cost)],['Laba kotor',money(revenue-cost)],['Pengeluaran tercatat',money(expenses)],['Estimasi laba setelah pengeluaran',money(revenue-cost-expenses)]])+'<p class="hint">Belum termasuk penyesuaian retur, pajak, depresiasi, dan biaya lain yang belum dicatat.</p></section>'}
@@ -36,6 +42,22 @@ window.saveOperation=async function(action){
  if(!confirm('Simpan '+action+'? Perubahan stok dan pembukuan akan dicatat.'))return;
  cloudBusy=true;
  try{const {error}=await sb.rpc('rifqy_operations_write',{p_action:action,p_data:data});if(error)throw error;await previousLoad(cloudSession);await refreshOperations();render();toast('Data berhasil disimpan.')}catch(e){toast(authError(e))}finally{cloudBusy=false}
+};
+window.paySupplierDebt=async function(){
+ if(cloudBusy)return;
+ const purchaseId=$('#op-debt-purchase')?.value,amountText=$('#op-debt-amount')?.value,method=$('#op-debt-method')?.value,note=$('#op-debt-note')?.value||'';
+ const purchase=operations.purchases.find(p=>p.id===purchaseId);
+ if(!purchase||!validNum(amountText)||Number(amountText)<=0)return toast('Pilih nota dan isi nominal cicilan yang valid.');
+ const previous=(operations.supplier_payments||[]).filter(x=>x.purchase_id===purchaseId).reduce((n,x)=>n+Number(x.amount),0);
+ const remaining=Number(purchase.total)-Number(purchase.paid)-previous;
+ if(Number(amountText)>remaining)return toast('Pembayaran melebihi sisa utang '+money(remaining));
+ if(!confirm('Catat pembayaran supplier '+money(Number(amountText))+'?'))return;
+ cloudBusy=true;
+ try{
+  const {error}=await sb.rpc('rifqy_supplier_payment',{p_data:{id:'SP-'+newId(),purchase_id:purchaseId,amount:amountText,method,note}});
+  if(error)throw error;
+  await refreshOperations();render();toast('Cicilan supplier berhasil dicatat.');
+ }catch(e){toast(authError(e))}finally{cloudBusy=false}
 };
 window.printOperationLabel=function(){
  const p=db.products.find(x=>x.id===$('#op-product')?.value);if(!p)return;
