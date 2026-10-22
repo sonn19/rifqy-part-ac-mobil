@@ -45,7 +45,7 @@ Buka **Settings → Pages** pada repositori ini. Pada **Build and deployment**, 
 
 Setelah alamat GitHub Pages aktif, atur **Authentication → URL Configuration** pada proyek Supabase Rifqy. Isi **Site URL** dengan alamat lengkap aplikasi (termasuk path repositori bila ada), dan tambahkan alamat yang sama pada **Redirect URLs**. Saat domain sendiri dipasang, tambahkan alamat domain tersebut juga.
 
-Untuk domain sendiri, tentukan nama domain/subdomain terlebih dahulu, lalu atur **Custom domain** pada GitHub Pages dan DNS sesuai petunjuk GitHub. Belum ada domain khusus pada repositori ini.
+Untuk domain sendiri, tentukan nama domain/subdomain terlebih dahulu, lalu atur **Custom domain** pada GitHub Pages dan DNS sesuai petunjuk GitHub. Domain aktif: https://partacmobil.my.id/ (lihat `CNAME`).
 
 Repositori publik hanya berisi kode dan konfigurasi publishable key. Data barang, harga beli, transaksi, akun, dan kata sandi tidak disimpan di GitHub. Binding email owner untuk instalasi baru harus dilakukan secara privat di SQL Editor; email owner tidak ditanam dalam skrip publik. Proyek Supabase Rifqy yang sudah aktif telah memiliki binding owner.
 
@@ -62,3 +62,13 @@ Repositori publik hanya berisi kode dan konfigurasi publishable key. Data barang
 Validasi tambahan: akses katalog sebagai anon diuji dalam transaksi rollback untuk memastikan harga beli/harga bengkel/stok persis tidak terbuka, kecocokan yang belum diverifikasi tidak dipublikasikan, dan API kasir tetap terlindungi. Uji katalog juga mencakup render, pencarian kode, filter kategori/ketersediaan, pengurutan harga, dan escaping teks produk.
 
 Catatan pengaturan Auth: pemeriksaan Supabase menandai proteksi kata sandi bocor belum aktif. Pengaturan dan panduannya tersedia di [Password strength and leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
+
+## Scan dan label barcode
+
+- Katalog publik dibuat ringkas: cari barang, kategori, filter dan harga retail.
+- Saat menambah barang, pilih **Scan kamera** untuk mengisi kode SKU dari barcode kemasan. Formulir lain tetap tersimpan saat kamera dibuka. Barang tanpa barcode dapat memakai **Buat kode sendiri**.
+- Tombol **Scan kode** pada katalog publik, daftar barang, dan kasir mencari SKU yang sama; scan di kasir belum otomatis memasukkan barang ke keranjang.
+- Tombol **Barcode** pada daftar barang menampilkan ulang kode tersimpan, menyiapkan 1–48 label CODE128, dan mencetak/menyimpan PDF. Harga retail opsional. Uji satu label dengan skala 100% sebelum mencetak banyak.
+- Kamera memerlukan HTTPS, izin kamera, dan browser HP yang mendukung getUserMedia. Ada input manual jika kamera tidak tersedia. Frame kamera diproses di perangkat, tidak diunggah.
+- Decoder ZXing Browser 0.2.1 dimuat saat scan dibuka. Label memakai JsBarcode 3.12.3. Keduanya disimpan di `vendor/` beserta lisensi MIT. Tidak ada perubahan skema database: barcode memakai SKU yang sudah ada.
+- Validasi: pemeriksaan sintaks JS, encode/decode CODE128 dengan tiga kode (termasuk angka 13 digit), input kode, pencarian ulang, pelestarian isian formulir, dan persiapan label dengan harga melalui demo terpisah. Kamera fisik HP dan hasil cetak fisik masih perlu diuji di perangkat pengguna.
