@@ -21,3 +21,8 @@ aside .aside-bottom{margin-top:12px;padding:10px;flex-shrink:0}
 aside .aside-bottom p{margin:5px 0}
 aside .profile{margin-top:9px;padding-top:9px;flex-shrink:0}
 @media(max-width:600px){aside{height:100dvh;max-height:100dvh;overflow-y:auto;touch-action:pan-y;overscroll-behavior-y:contain;padding-bottom:calc(22px + env(safe-area-inset-bottom))}}
+
+/* Keep uploaded photos within catalog cards and table thumbnails. */
+.product-card .product-photo{display:block;width:100%;height:80px;max-height:80px;min-height:0;object-fit:contain;object-position:center;background:#f4f6ef;border-radius:8px;padding:7px;box-sizing:border-box;cursor:zoom-in}
+.product-name .product-photo{display:block;width:45px;height:45px;min-width:45px;max-width:45px;max-height:45px;object-fit:contain;background:#f4f6ef;border-radius:8px;padding:4px;box-sizing:border-box;cursor:zoom-in}
+.product-name{min-width:0}.product-name>div:last-child{min-width:0;overflow-wrap:anywhere}
