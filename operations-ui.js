@@ -6,7 +6,8 @@ const operationsRoutes=['purchasing','cashbook','inventory-count','profit','labe
 const navEntries=[['purchasing','Pembelian supplier','package'],['cashbook','Buku kas','wallet'],['inventory-count','Stok opname','clipboard'],['profit','Laba rugi','chart'],['labels','Label barcode','tag']];
 const validNum=x=>Number.isSafeInteger(Number(x))&&Number(x)>=0&&String(x).trim()!=='';
 async function refreshOperations(){if(demoMode||!cloudState)return;const {data,error}=await sb.rpc('rifqy_operations_state');if(error)throw error;operations=data||operations;}
-window.loadCloud=async function(session){await previousLoad(session);try{await refreshOperations();render();}catch(e){console.warn('Operasional gagal dimuat',e)}};
+window.refreshRifqyOperations=refreshOperations;
+window.loadCloud=async function(session){await previousLoad(session)};
 function navHtml(){return navEntries.map(([id,label])=>'<a href="#'+id+'" class="'+(location.hash==='#'+id?'active':'')+'">'+icon('products')+label+'</a>').join('')}
 window.render=function(){
  const target=location.hash.slice(1);
