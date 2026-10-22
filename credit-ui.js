@@ -41,16 +41,19 @@ window.cloudCheckout=async function(){
 };
 
 const baseRender=render;
+const creditNav='<a href="#receivables" class="credit-nav">'+icon('customers')+'Piutang bengkel</a>';
+const baseLoadCloud=loadCloud;
+window.loadCloud=async function(session){await baseLoadCloud(session);if(demoMode||!cloudState)return;try{const {data,error}=await sb.rpc('rifqy_credit_state');if(error)throw error;window.creditData=data||{orders:[],payments:[]};render();}catch(e){console.warn('Status piutang belum termuat',e);}};
 window.render=function(){
  if(location.hash==='#receivables'&&!demoMode&&cloudState){
   route='receivables';baseRender();route='receivables';
   $('#crumb').textContent='Piutang bengkel';
-  $('#nav').insertAdjacentHTML('beforeend','<a href="#receivables" class="active">Piutang bengkel</a>');
+  $('#nav').insertAdjacentHTML('beforeend',creditNav.replace('credit-nav','credit-nav active'));
   $('#app').innerHTML='<section class="panel" style="padding:24px"><h2>Piutang Bengkel</h2><p>Memuat daftar tagihan...</p></section>';
   loadReceivables();
  }else{
   baseRender();
-  if(!demoMode&&cloudState&&!$('#nav a[href="#receivables"]'))$('#nav').insertAdjacentHTML('beforeend','<a href="#receivables">Piutang bengkel</a>');
+  if(!demoMode&&cloudState&&!$('#nav a[href="#receivables"]'))$('#nav').insertAdjacentHTML('beforeend',creditNav);
  }
 };
 window.loadReceivables=async function(){
