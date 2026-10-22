@@ -11,7 +11,7 @@ function navHtml(){return navEntries.map(([id,label])=>'<a href="#'+id+'" class=
 window.render=function(){
  const target=location.hash.slice(1);
  if(!operationsRoutes.includes(target)||demoMode||!cloudState){previousRender();if(!demoMode&&cloudState&&isOwner())$('#nav').insertAdjacentHTML('beforeend',navHtml());return}
- location.hash='#dashboard';previousRender();history.replaceState(null,'','#'+target);route=target;
+ history.replaceState(null,'','#dashboard');previousRender();history.replaceState(null,'','#'+target);route=target;
  $('#nav').insertAdjacentHTML('beforeend',navHtml());$('#crumb').textContent=navEntries.find(x=>x[0]===target)[1];
  if(!isOwner()){$('#app').innerHTML='<section class="panel">Hanya owner dapat mengakses fitur ini.</section>';return}
  $('#app').innerHTML=operationsPage(target);
@@ -40,6 +40,6 @@ window.saveOperation=async function(action){
 window.printOperationLabel=function(){
  const p=db.products.find(x=>x.id===$('#op-product')?.value);if(!p)return;
  const win=window.open('','_blank');if(!win)return toast('Izinkan pop-up untuk cetak label');
- win.document.write('<!doctype html><html><head><title>Label barang</title><style>body{font:14px Arial;padding:20px}.label{width:270px;border:1px solid #aaa;padding:14px;text-align:center}svg{max-width:100%}@media print{.label{border:0}}</style></head><body><div class="label"><strong>'+esc(p.name)+'</strong><p>'+esc(p.sku)+'</p><svg id="barcode"></svg><p>'+money(p.retail)+'</p></div><script src="vendor/jsbarcode-3.12.3.all.min.js"><\/script><script>try{JsBarcode("#barcode",'+JSON.stringify(p.sku)+',{format:"CODE128",width:1.5,height:55})}catch(e){};setTimeout(()=>print(),350)<\/script></body></html>');win.document.close();
+ win.document.write('<!doctype html><html><head><title>Label barang</title><style>body{font:14px Arial;padding:20px}.label{width:270px;border:1px solid #aaa;padding:14px;text-align:center}svg{max-width:100%}@media print{.label{border:0}}</style></head><body><div class="label"><strong>'+esc(p.name)+'</strong><p>'+esc(p.sku)+'</p><svg id="barcode"></svg><p>'+money(p.retail)+'</p></div><script src="https://partacmobil.my.id/vendor/jsbarcode-3.12.3.all.min.js"><\/script><script>try{JsBarcode("#barcode",'+JSON.stringify(p.sku)+',{format:"CODE128",width:1.5,height:55})}catch(e){};setTimeout(()=>print(),350)<\/script></body></html>');win.document.close();
 };
 })();
