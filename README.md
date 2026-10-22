@@ -1,1 +1,50 @@
-# rifqy-part-ac-mobil
+# Rifqy Part AC Mobil
+
+Aplikasi kasir dan pengelolaan spare part AC mobil. Tampilan statis HTML/CSS/JavaScript; data toko dan login menggunakan proyek Supabase terpisah.
+
+## Menjalankan dan menghosting
+
+File aplikasi pada root repositori siap dilayani oleh hosting statis atau GitHub Pages. Tidak memerlukan proses build. URL proyek Supabase dan publishable key di `cloud.js` memang bersifat publik. Jangan pernah menambahkan service role/secret key ke folder ini atau Git.
+
+Supabase JS 2.118.0 disertakan dalam `vendor/` dengan versi tetap agar tidak bergantung pada CDN saat aplikasi berjalan. Font memiliki fallback sistem.
+
+## Login pertama
+
+1. Buka aplikasi dan pilih **Pertama kali? Daftar akun**.
+2. Gunakan email owner yang sudah diizinkan di `rifqy.members`, lalu tentukan kata sandi sendiri.
+3. Verifikasi email melalui email Supabase. Kembali ke aplikasi dan masuk.
+4. Data toko online dimulai kosong; data contoh hanya muncul pada **Coba demo tanpa login**.
+5. Owner membuka **Akses admin** untuk menambahkan email admin; admin mendaftar dan memverifikasi emailnya sendiri.
+
+Sebelum onboarding admin atau menggunakan pemulihan kata sandi, atur **Authentication → URL Configuration** di Supabase: Site URL = alamat hosting aktif, tambahkan URL tersebut pada Redirect URLs. Tambahkan domain baru saat berpindah hosting. Atur SMTP untuk pengiriman email ke alamat admin/pelanggan di luar email yang diizinkan penyedia email bawaan Supabase. Jangan menonaktifkan konfirmasi email: akses toko bergantung pada identitas email terverifikasi.
+
+## Data dan akses
+
+`database/schema.sql` adalah skrip instalasi untuk database kosong, bukan skrip yang dijalankan ulang pada produksi. Skema telah dipasang di proyek Rifqy. Semua tabel bisnis berada dalam skema `rifqy`, RLS aktif dan akses tabel langsung ditolak. Dua wrapper RPC di `public` berjalan sebagai invoker dan memanggil implementasi privat dengan pemeriksaan akun terverifikasi dan keanggotaan toko pada setiap permintaan.
+
+- Owner: katalog/harga, pelanggan, stok, kasir, laporan harga beli/laba, ekspor cadangan, akses admin.
+- Admin: pelanggan, stok, kasir. API tidak mengirim harga beli dan biaya snapshot ke admin.
+- Tidak ada login: tidak mendapat akses data bisnis. Mode demo terpisah memakai browser.
+
+Checkout memakai harga dari server, mengunci stok dalam urutan ID stabil, menyimpan snapshot harga beli/jual, menolak stok negatif, mengecek perubahan total, dan memakai ID permintaan untuk mencegah transaksi ganda saat retry. Perubahan stok dan pencatatan transaksi berjalan dalam satu transaksi database.
+
+Data dari perangkat lain diambil melalui **Muat ulang data**. Versi ini belum memakai pembaruan realtime. Ekspor cadangan online tersedia untuk owner; pemulihan cadangan toko online belum tersedia. Cadangan dan data demo tetap dapat dipulihkan di mode demo. Pembayaran Tunai/Transfer/QRIS hanya dicatat; belum terhubung payment gateway.
+
+## Validasi
+
+- `node --check app.js` dan `node --check cloud.js`.
+- Uji database dalam transaksi yang di-rollback: checkout harga bengkel, pengurangan stok, snapshot biaya, idempotensi, penambahan stok, penolakan stok negatif, penolakan edit katalog oleh admin, dan penghilangan biaya dari respons admin.
+- Pemeriksaan hak akses: anon tidak dapat memanggil RPC; authenticated tidak dapat membaca tabel privat langsung.
+- Pemeriksaan UI: halaman login, formulir pendaftaran, mode demo, kasir, penghitungan kembalian, perubahan stok, pencarian, penyimpanan lokal setelah reload.
+
+Pengujian login akun owner sampai berhasil masuk memerlukan pemilik membuat dan memverifikasi akunnya. Tidak ada kata sandi owner yang dibuat atau disimpan oleh pengembang.
+
+## Aktifkan GitHub Pages
+
+Buka **Settings → Pages** pada repositori ini. Pada **Build and deployment**, pilih **Deploy from a branch**, branch **main**, folder **/(root)**, lalu **Save**. Tunggu GitHub menampilkan alamat publikasi berhasil.
+
+Setelah alamat GitHub Pages aktif, atur **Authentication → URL Configuration** pada proyek Supabase Rifqy. Isi **Site URL** dengan alamat lengkap aplikasi (termasuk path repositori bila ada), dan tambahkan alamat yang sama pada **Redirect URLs**. Saat domain sendiri dipasang, tambahkan alamat domain tersebut juga.
+
+Untuk domain sendiri, tentukan nama domain/subdomain terlebih dahulu, lalu atur **Custom domain** pada GitHub Pages dan DNS sesuai petunjuk GitHub. Belum ada domain khusus pada repositori ini.
+
+Repositori publik hanya berisi kode dan konfigurasi publishable key. Data barang, harga beli, transaksi, akun, dan kata sandi tidak disimpan di GitHub. Binding email owner untuk instalasi baru harus dilakukan secara privat di SQL Editor; email owner tidak ditanam dalam skrip publik. Proyek Supabase Rifqy yang sudah aktif telah memiliki binding owner.
