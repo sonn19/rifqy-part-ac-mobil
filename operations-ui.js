@@ -1,0 +1,45 @@
+// Operations extension: supplier purchasing, expenses, stock counts, profitability, labels.
+(function(){
+const previousRender=render,previousLoad=loadCloud;
+let operations={suppliers:[],purchases:[],expenses:[],stock_counts:[]};
+const operationsRoutes=['purchasing','cashbook','inventory-count','profit','labels'];
+const navEntries=[['purchasing','Pembelian supplier','package'],['cashbook','Buku kas','wallet'],['inventory-count','Stok opname','clipboard'],['profit','Laba rugi','chart'],['labels','Label barcode','tag']];
+const validNum=x=>Number.isSafeInteger(Number(x))&&Number(x)>=0&&String(x).trim()!=='';
+async function refreshOperations(){if(demoMode||!cloudState)return;const {data,error}=await sb.rpc('rifqy_operations_state');if(error)throw error;operations=data||operations;}
+window.loadCloud=async function(session){await previousLoad(session);try{await refreshOperations();render();}catch(e){console.warn('Operasional gagal dimuat',e)}};
+function navHtml(){return navEntries.map(([id,label])=>'<a href="#'+id+'" class="'+(location.hash==='#'+id?'active':'')+'">'+icon('products')+label+'</a>').join('')}
+window.render=function(){
+ const target=location.hash.slice(1);
+ if(!operationsRoutes.includes(target)||demoMode||!cloudState){previousRender();if(!demoMode&&cloudState&&isOwner())$('#nav').insertAdjacentHTML('beforeend',navHtml());return}
+ location.hash='#dashboard';previousRender();history.replaceState(null,'','#'+target);route=target;
+ $('#nav').insertAdjacentHTML('beforeend',navHtml());$('#crumb').textContent=navEntries.find(x=>x[0]===target)[1];
+ if(!isOwner()){$('#app').innerHTML='<section class="panel">Hanya owner dapat mengakses fitur ini.</section>';return}
+ $('#app').innerHTML=operationsPage(target);
+};
+const input=(id,label,type='text')=>'<div class="field"><label>'+label+'</label><input id="op-'+id+'" type="'+type+'"></div>';
+const productSelect=()=>'<select id="op-product">'+db.products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+esc(p.sku)+') · Stok '+p.stock+'</option>').join('')+'</select>';
+function operationsPage(r){
+ const start='<section class="panel" style="padding:24px"><h2>'+navEntries.find(x=>x[0]===r)[1]+'</h2>';
+ if(r==='purchasing')return start+'<h3>Tambah supplier</h3>'+input('supplier-name','Nama supplier')+input('supplier-phone','Telepon')+'<button class="btn" onclick="saveOperation(\'supplier\')">Simpan supplier</button><h3>Pembelian barang</h3><div class="field"><label>Supplier</label><select id="op-supplier">'+operations.suppliers.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></div><div class="field"><label>Barang</label>'+productSelect()+'</div>'+input('qty','Jumlah barang','number')+input('cost','Harga modal per unit','number')+input('paid','Jumlah dibayar ke supplier','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'purchase\')">Simpan pembelian & tambah stok</button><h3>Riwayat pembelian</h3>'+simpleTable(['Tanggal','Supplier','Total','Dibayar','Utang'],operations.purchases.map(p=>[date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(p.paid),money(p.total-p.paid)]))+'</section>';
+ if(r==='cashbook')return start+'<h3>Catat pengeluaran</h3>'+input('category','Kategori')+input('description','Keterangan')+input('amount','Nominal (Rp)','number')+'<button class="btn" onclick="saveOperation(\'expense\')">Simpan pengeluaran</button><h3>Riwayat pengeluaran</h3>'+simpleTable(['Tanggal','Kategori','Keterangan','Nominal'],operations.expenses.map(e=>[date(e.created_at),e.category,e.description,money(e.amount)]))+'</section>';
+ if(r==='inventory-count')return start+'<p>Masukkan jumlah fisik. Perbedaan dengan stok sistem akan tercatat sebagai koreksi.</p><div class="field"><label>Produk</label>'+productSelect()+'</div>'+input('actual','Jumlah fisik','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'stock_count\')">Simpan hasil opname</button><h3>Riwayat opname</h3>'+simpleTable(['Tanggal','Produk','Sistem','Fisik','Selisih'],operations.stock_counts.map(x=>[date(x.created_at),db.products.find(p=>p.id===x.product_id)?.name||x.product_id,x.system_qty,x.actual_qty,x.actual_qty-x.system_qty]))+'</section>';
+ if(r==='profit'){const revenue=db.orders.reduce((n,o)=>n+Number(o.total||0),0),cost=db.orders.reduce((n,o)=>n+(o.items||[]).reduce((m,x)=>m+Number(x.cost||0)*Number(x.qty||0),0),0),expenses=operations.expenses.reduce((n,e)=>n+Number(e.amount),0);return start+'<p>Ringkasan seluruh data yang dimuat (bukan laporan per periode). Penjualan Bon dihitung sebagai pendapatan penjualan, bukan penerimaan kas.</p>'+simpleTable(['Komponen','Nilai'],[['Omzet',money(revenue)],['HPP barang terjual',money(cost)],['Laba kotor',money(revenue-cost)],['Pengeluaran tercatat',money(expenses)],['Estimasi laba setelah pengeluaran',money(revenue-cost-expenses)]])+'<p class="hint">Belum termasuk penyesuaian retur, pajak, depresiasi, dan biaya lain yang belum dicatat.</p></section>'}
+ return start+'<p>Pilih barang lalu cetak label SKU dan barcode.</p><div class="field"><label>Produk</label>'+productSelect()+'</div><button class="btn" onclick="printOperationLabel()">Cetak label</button><div id="op-label-preview"></div></section>';
+}
+function simpleTable(headers,rows){return '<div class="table-wrap"><table><thead><tr>'+headers.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'}
+window.saveOperation=async function(action){
+ if(cloudBusy)return;const val=id=>$('#op-'+id)?.value||'',id='OP-'+newId();let data={id};
+ if(action==='supplier'){data.name=val('supplier-name').trim();data.phone=val('supplier-phone');if(!data.name)return toast('Isi nama supplier')}
+ if(action==='expense'){data.category=val('category')||'Lainnya';data.description=val('description').trim();data.amount=val('amount');if(!data.description||!validNum(data.amount)||Number(data.amount)===0)return toast('Periksa keterangan dan nominal')}
+ if(action==='stock_count'){data.product_id=val('product');data.actual_qty=val('actual');data.note=val('note');if(!validNum(data.actual_qty))return toast('Jumlah fisik tidak valid')}
+ if(action==='purchase'){data.supplier_id=val('supplier');data.items=[{product_id:val('product'),qty:val('qty'),cost:val('cost')}];data.paid=val('paid');data.note=val('note');if(!data.supplier_id||!validNum(val('qty'))||Number(val('qty'))===0||!validNum(val('cost'))||!validNum(data.paid))return toast('Periksa supplier, jumlah, harga modal, dan pembayaran');if(Number(data.paid)>Number(val('qty'))*Number(val('cost')))return toast('Pembayaran melebihi total pembelian')}
+ if(!confirm('Simpan '+action+'? Perubahan stok dan pembukuan akan dicatat.'))return;
+ cloudBusy=true;
+ try{const {error}=await sb.rpc('rifqy_operations_write',{p_action:action,p_data:data});if(error)throw error;await previousLoad(cloudSession);await refreshOperations();render();toast('Data berhasil disimpan.')}catch(e){toast(authError(e))}finally{cloudBusy=false}
+};
+window.printOperationLabel=function(){
+ const p=db.products.find(x=>x.id===$('#op-product')?.value);if(!p)return;
+ const win=window.open('','_blank');if(!win)return toast('Izinkan pop-up untuk cetak label');
+ win.document.write('<!doctype html><html><head><title>Label barang</title><style>body{font:14px Arial;padding:20px}.label{width:270px;border:1px solid #aaa;padding:14px;text-align:center}svg{max-width:100%}@media print{.label{border:0}}</style></head><body><div class="label"><strong>'+esc(p.name)+'</strong><p>'+esc(p.sku)+'</p><svg id="barcode"></svg><p>'+money(p.retail)+'</p></div><script src="vendor/jsbarcode-3.12.3.all.min.js"><\/script><script>try{JsBarcode("#barcode",'+JSON.stringify(p.sku)+',{format:"CODE128",width:1.5,height:55})}catch(e){};setTimeout(()=>print(),350)<\/script></body></html>');win.document.close();
+};
+})();
