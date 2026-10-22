@@ -7,6 +7,8 @@ const navEntries=[['purchasing','Pembelian supplier','package'],['cashbook','Buk
 const validNum=x=>Number.isSafeInteger(Number(x))&&Number(x)>=0&&String(x).trim()!=='';
 async function refreshOperations(){if(demoMode||!cloudState)return;const {data,error}=await sb.rpc('rifqy_operations_state');if(error)throw error;operations=data||operations;}
 window.refreshRifqyOperations=refreshOperations;
+let operationsLoading=false;
+async function ensureOperations(){if(operationsLoading)return;operationsLoading=true;try{await refreshOperations();if(operationsRoutes.includes(location.hash.slice(1)))render()}catch(e){console.warn('Gagal memuat data supplier',e);toast('Data supplier gagal dimuat. Coba buka tab kembali.')}finally{operationsLoading=false}}
 window.loadCloud=async function(session){await previousLoad(session)};
 function navHtml(){return navEntries.map(([id,label])=>'<a href="#'+id+'" class="'+(location.hash==='#'+id?'active':'')+'">'+icon('products')+label+'</a>').join('')}
 window.render=function(){
@@ -15,6 +17,7 @@ window.render=function(){
  history.replaceState(null,'','#dashboard');previousRender();history.replaceState(null,'','#'+target);route=target;
  $('#nav').insertAdjacentHTML('beforeend',navHtml());$('#crumb').textContent=navEntries.find(x=>x[0]===target)[1];
  if(!isOwner()){$('#app').innerHTML='<section class="panel">Hanya owner dapat mengakses fitur ini.</section>';return}
+ if(target==='purchasing'&&operations.suppliers.length===0&&operations.purchases.length===0){$('#app').innerHTML='<section class="panel" style="padding:24px">Memuat riwayat pembelian supplier…</section>';ensureOperations();return}
  $('#app').innerHTML=operationsPage(target);
 };
 const input=(id,label,type='text')=>'<div class="field"><label>'+label+'</label><input id="op-'+id+'" type="'+type+'"></div>';
