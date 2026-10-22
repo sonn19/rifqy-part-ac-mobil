@@ -23,7 +23,7 @@ function operationsPage(r){
  if(r==='purchasing'){
  const paidFor=id=>(operations.supplier_payments||[]).filter(x=>x.purchase_id===id).reduce((n,x)=>n+Number(x.amount),0);
  const debt=operations.purchases.reduce((n,p)=>n+Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id)),0);
- const history=operations.purchases.map(p=>{const remaining=Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id));return [date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(Number(p.paid)+paidFor(p.id)),money(remaining),remaining?'Belum lunas':'Lunas']});
+ const history=operations.purchases.map(p=>{const remaining=Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id));return [date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(Number(p.paid)+paidFor(p.id)),money(remaining),remaining?'<button class="action-sm" onclick="selectSupplierInvoice(&quot;'+esc(p.id)+'&quot;)">Bayar / Lunasi</button>':'Lunas']});
  const outstanding=operations.purchases.filter(p=>Number(p.total)-Number(p.paid)-paidFor(p.id)>0);
  return start+'<p>Total utang supplier: <strong>'+money(debt)+'</strong></p><h3>Tambah supplier</h3>'+input('supplier-name','Nama supplier')+input('supplier-phone','Telepon')+'<button class="btn" onclick="saveOperation(\'supplier\')">Simpan supplier</button><h3>Pembelian barang</h3><div class="field"><label>Supplier</label><select id="op-supplier">'+operations.suppliers.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></div><div class="field"><label>Barang</label>'+productSelect()+'</div>'+input('qty','Jumlah barang','number')+input('cost','Harga modal per unit','number')+input('paid','Jumlah dibayar ke supplier','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'purchase\')">Simpan pembelian & tambah stok</button><h3>Bayar cicilan utang supplier</h3><div class="field"><label>Nota pembelian belum lunas</label><select id="op-debt-purchase">'+outstanding.map(p=>'<option value="'+esc(p.id)+'">'+esc(operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-')+' · '+esc(p.id)+' · Sisa '+money(Number(p.total)-Number(p.paid)-paidFor(p.id))+'</option>').join('')+'</select></div>'+input('debt-amount','Jumlah cicilan (Rp)','number')+'<button type="button" class="btn secondary" onclick="fillSupplierDebt()">Lunasi Semua</button>'+'<div class="field"><label>Metode pembayaran</label><select id="op-debt-method"><option>Tunai</option><option>Transfer bank</option><option>QRIS</option></select></div>'+input('debt-note','Catatan pembayaran')+'<button class="btn" onclick="paySupplierDebt()">Catat pembayaran supplier</button><h3>Riwayat pembelian</h3>'+simpleTable(['Tanggal','Supplier','Total','Sudah dibayar','Sisa utang','Status'],history)+'<h3>Riwayat cicilan supplier</h3>'+simpleTable(['Tanggal','Nota pembelian','Nominal','Metode','Catatan'],(operations.supplier_payments||[]).map(p=>[date(p.paid_at),p.purchase_id,money(p.amount),p.method,p.note]))+'</section>';
  }
@@ -42,6 +42,14 @@ window.saveOperation=async function(action){
  if(!confirm('Simpan '+action+'? Perubahan stok dan pembukuan akan dicatat.'))return;
  cloudBusy=true;
  try{const {error}=await sb.rpc('rifqy_operations_write',{p_action:action,p_data:data});if(error)throw error;await previousLoad(cloudSession);await refreshOperations();render();toast('Data berhasil disimpan.')}catch(e){toast(authError(e))}finally{cloudBusy=false}
+};
+window.selectSupplierInvoice=function(id){
+ const select=$('#op-debt-purchase');
+ if(!select)return toast('Form pembayaran belum tersedia.');
+ select.value=id;
+ if(select.value!==id)return toast('Nota tidak ada dalam daftar utang aktif.');
+ fillSupplierDebt();
+ select.scrollIntoView({behavior:'smooth',block:'center'});
 };
 window.fillSupplierDebt=function(){
  const id=$('#op-debt-purchase')?.value;
