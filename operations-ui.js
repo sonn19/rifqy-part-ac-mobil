@@ -20,6 +20,7 @@ window.render=function(){
  if(target==='purchasing'&&operations.suppliers.length===0&&operations.purchases.length===0){$('#app').innerHTML='<section class="panel" style="padding:24px">Memuat riwayat pembelian supplier…</section>';ensureOperations();return}
  $('#app').innerHTML=operationsPage(target);
  $('#app').querySelectorAll('[data-supplier-invoice]').forEach(button=>button.addEventListener('click',()=>selectSupplierInvoice(button.dataset.supplierInvoice)));
+ $('#app').querySelectorAll('[data-print-purchase]').forEach(button=>button.addEventListener('click',()=>printSupplierReceipt(button.dataset.printPurchase)));
 };
 const input=(id,label,type='text')=>'<div class="field"><label>'+label+'</label><input id="op-'+id+'" type="'+type+'"></div>';
 const productSelect=()=>'<select id="op-product">'+db.products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' ('+esc(p.sku)+') · Stok '+p.stock+'</option>').join('')+'</select>';
@@ -28,7 +29,7 @@ function operationsPage(r){
  if(r==='purchasing'){
  const paidFor=id=>(operations.supplier_payments||[]).filter(x=>x.purchase_id===id).reduce((n,x)=>n+Number(x.amount),0);
  const debt=operations.purchases.reduce((n,p)=>n+Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id)),0);
- const history=operations.purchases.map(p=>{const remaining=Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id));return [date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(Number(p.paid)+paidFor(p.id)),money(remaining),remaining?{html:'<button type="button" class="action-sm" data-supplier-invoice="'+esc(p.id)+'">Bayar / Lunasi</button>'}:'Lunas']});
+ const history=operations.purchases.map(p=>{const remaining=Math.max(0,Number(p.total)-Number(p.paid)-paidFor(p.id));return [date(p.created_at),operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-',money(p.total),money(Number(p.paid)+paidFor(p.id)),money(remaining),{html:'<button type="button" class="action-sm" data-print-purchase="'+esc(p.id)+'">Cetak nota</button> '+(remaining?'<button type="button" class="action-sm" data-supplier-invoice="'+esc(p.id)+'">Bayar / Lunasi</button>':'<span class="pill">Lunas</span>')}]});
  const outstanding=operations.purchases.filter(p=>Number(p.total)-Number(p.paid)-paidFor(p.id)>0);
  return start+'<p>Total utang supplier: <strong>'+money(debt)+'</strong></p><h3>Tambah supplier</h3>'+input('supplier-name','Nama supplier')+input('supplier-phone','Telepon')+'<button class="btn" onclick="saveOperation(\'supplier\')">Simpan supplier</button><h3>Pembelian barang</h3><div class="field"><label>Supplier</label><select id="op-supplier">'+operations.suppliers.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select></div><div class="field"><label>Barang</label>'+productSelect()+'</div>'+input('qty','Jumlah barang','number')+input('cost','Harga modal per unit','number')+input('paid','Jumlah dibayar ke supplier','number')+input('note','Catatan')+'<button class="btn" onclick="saveOperation(\'purchase\')">Simpan pembelian & tambah stok</button><h3>Bayar cicilan utang supplier</h3><div class="field"><label>Nota pembelian belum lunas</label><select id="op-debt-purchase">'+outstanding.map(p=>'<option value="'+esc(p.id)+'">'+esc(operations.suppliers.find(s=>s.id===p.supplier_id)?.name||'-')+' — Sisa '+money(Number(p.total)-Number(p.paid)-paidFor(p.id))+'</option>').join('')+'</select></div>'+input('debt-amount','Jumlah cicilan (Rp)','number')+'<button type="button" class="btn secondary" onclick="fillSupplierDebt()">Lunasi Semua</button>'+'<div class="field"><label>Metode pembayaran</label><select id="op-debt-method"><option>Tunai</option><option>Transfer bank</option><option>QRIS</option></select></div>'+input('debt-note','Catatan pembayaran')+'<button class="btn" onclick="paySupplierDebt()">Catat pembayaran supplier</button><h3>Riwayat pembelian</h3>'+simpleTable(['Tanggal','Supplier','Total','Sudah dibayar','Sisa utang','Status'],history)+'<h3>Riwayat cicilan supplier</h3>'+simpleTable(['Tanggal','Nota pembelian','Nominal','Metode','Catatan'],(operations.supplier_payments||[]).map(p=>[date(p.paid_at),p.purchase_id,money(p.amount),p.method,p.note]))+'</section>';
  }
@@ -81,6 +82,24 @@ window.paySupplierDebt=async function(){
   if(error)throw error;
   await refreshOperations();render();toast('Cicilan supplier berhasil dicatat.');
  }catch(e){toast(authError(e))}finally{cloudBusy=false}
+};
+window.printSupplierReceipt=function(id){
+ if(!isOwner())return toast('Nota pembelian khusus owner.');
+ const p=operations.purchases.find(x=>x.id===id);if(!p)return toast('Nota tidak ditemukan.');
+ const supplier=operations.suppliers.find(x=>x.id===p.supplier_id);
+ const paid=Number(p.paid||0)+(operations.supplier_payments||[]).filter(x=>x.purchase_id===id).reduce((n,x)=>n+Number(x.amount||0),0);
+ const remaining=Math.max(0,Number(p.total)-paid);
+ const items=Array.isArray(p.items)?p.items:Array.isArray(p.purchase_items)?p.purchase_items:[];
+ const fmt=n=>money(Number(n||0));
+ const w=localStorage.getItem('rifqy-thermal-width')==='80'?'80':'58';
+ const choice=prompt('Lebar printer thermal (58 atau 80 mm)',w);if(choice===null)return;
+ const width=choice.trim()==='80'?'80':choice.trim()==='58'?'58':null;
+ if(!width)return toast('Pilih 58 atau 80 mm.');
+ localStorage.setItem('rifqy-thermal-width',width);
+ const rows=items.length?items.map(i=>'<div class="item"><b>'+esc(i.name||db.products.find(x=>x.id===i.product_id)?.name||i.product_id||'Barang')+'</b><div class="pair"><span>'+esc(String(i.qty||0))+' x '+fmt(i.cost)+'</span><span>'+fmt(Number(i.qty||0)*Number(i.cost||0))+'</span></div></div>').join(''):'<p class="muted">Rincian barang belum tersedia pada data nota ini. Total pembelian tetap tercatat.</p>';
+ const html='<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Nota Pembelian Supplier</title><style>@page{size:'+width+'mm auto;margin:0}*{box-sizing:border-box}body{margin:0;padding:3mm;width:'+width+'mm;font:11px/1.5 Arial,sans-serif;color:#000}.center{text-align:center}.muted{font-size:10px}h2{font-size:14px;margin:0}.line{border-top:1px dashed #000;margin:8px 0}.pair{display:flex;justify-content:space-between;gap:6px}.pair span:last-child{text-align:right}.item{margin:7px 0;overflow-wrap:anywhere}.item b{display:block}strong{font-weight:700}@media screen{body{margin:20px auto;box-shadow:0 0 0 1px #ddd}}@media print{html,body{height:auto;min-height:0}}</style></head><body><div class="center"><h2>RIFQY PART AC MOBIL</h2><b>NOTA PEMBELIAN SUPPLIER</b></div><div class="line"></div><div>Tanggal: '+esc(date(p.created_at))+'</div><div>Supplier: '+esc(supplier?.name||'-')+'</div><div class="muted">Ref: '+esc(p.id)+'</div><div class="line"></div>'+rows+'<div class="line"></div><div class="pair"><strong>TOTAL</strong><strong>'+fmt(p.total)+'</strong></div><div class="pair"><span>Dibayar</span><span>'+fmt(paid)+'</span></div><div class="pair"><strong>Sisa utang</strong><strong>'+fmt(remaining)+'</strong></div><div class="center" style="margin-top:12px">Dokumen internal toko</div><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\\/script></body></html>';
+ const win=window.open('','_blank');if(!win)return toast('Izinkan pop-up untuk mencetak nota.');
+ win.document.open();win.document.write(html);win.document.close();
 };
 window.printOperationLabel=function(){
  const p=db.products.find(x=>x.id===$('#op-product')?.value);if(!p)return;
